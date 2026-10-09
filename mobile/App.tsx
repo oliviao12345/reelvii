@@ -43,9 +43,27 @@ const c = {
 };
 
 const templates = [
-  { name: "Finds List", tag: "Most popular", a: "#9b7bff" },
-  { name: "Walkthrough", tag: "Tutorials", a: "#f4a6d7" },
-  { name: "Showcase", tag: "Demos", a: "#c9b8f5" },
+  {
+    name: "Finds List",
+    tag: "Most popular",
+    a: "#9b7bff",
+    blurb:
+      'Numbered sections, title card, subtle zooms and quick transitions. Great for "5 things" lists.',
+  },
+  {
+    name: "Walkthrough",
+    tag: "Tutorials",
+    a: "#f4a6d7",
+    blurb:
+      "Step labels, focus rectangles and controlled pacing. Great for tutorials.",
+  },
+  {
+    name: "Showcase",
+    tag: "Demos",
+    a: "#c9b8f5",
+    blurb:
+      "Premium framing, branded backdrop and a clean end card. Great for demos.",
+  },
 ];
 
 const drafts = [
@@ -233,77 +251,129 @@ function Home({
   onSample: (template: string) => void;
   onOpen: (p: Project) => void;
 }) {
+  const [picked, setPicked] = useState<(typeof templates)[number] | null>(null);
   return (
-    <ScrollView
-      contentContainerStyle={s.homeContent}
-      showsVerticalScrollIndicator={false}
-    >
-      <Text style={s.logo}>
-        reelvii<Text style={{ color: c.hot }}>.</Text>
-      </Text>
-      <Text style={s.h1}>
-        Record it.{"\n"}Style it.{"\n"}Share it.
-      </Text>
-
-      <Pressable
-        style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}
-        onPress={() => onNew("Finds List")}
-      >
-        <Text style={s.ctaText}>＋ Import recording</Text>
-      </Pressable>
-      <Pressable
-        style={({ pressed }) => [s.ctaAlt, pressed && { opacity: 0.85 }]}
-        onPress={() => onSample("Finds List")}
-      >
-        <Text style={s.ctaAltText}>✨ Try a sample recording</Text>
-      </Pressable>
-
-      <Text style={s.section}>Templates</Text>
+    <View style={{ flex: 1 }}>
       <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={{ marginHorizontal: -20 }}
+        contentContainerStyle={s.homeContent}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={{ flexDirection: "row", gap: 12, paddingHorizontal: 20 }}>
-          {templates.map((t) => (
-            <Pressable
-              key={t.name}
-              onPress={() => onNew(t.name)}
-              style={[s.tpl, { backgroundColor: t.a }]}
-            >
-              <Text style={s.tplTag}>{t.tag}</Text>
-              <View style={s.tplPhone}>
-                <MiniScreen name={t.name} />
-              </View>
-              <Text style={s.tplName}>{t.name}</Text>
-            </Pressable>
-          ))}
-        </View>
-      </ScrollView>
-
-      <Text style={s.section}>Recent projects</Text>
-      {projects.length === 0 && (
-        <Text style={s.sheetHint}>
-          No projects yet. Import a recording to start.
+        <Text style={s.logo}>
+          reelvii<Text style={{ color: c.hot }}>.</Text>
         </Text>
-      )}
-      {projects.map((p) => (
-        <Pressable key={p.id} style={s.draft} onPress={() => onOpen(p)}>
-          <View style={s.draftThumb} />
-          <View style={{ flex: 1 }}>
-            <Text style={s.draftName} numberOfLines={1}>
-              {p.name}
-            </Text>
-            <Text style={s.draftMeta}>
-              {p.template} · {fmt(p.trim[1] - p.trim[0])}
-            </Text>
-          </View>
-          <Text style={[s.badge, !p.exported && s.badgeDraft]}>
-            {p.exported ? "Exported" : "Draft"}
-          </Text>
+        <Text style={s.h1}>
+          Record it.{"\n"}Style it.{"\n"}Share it.
+        </Text>
+
+        <Pressable
+          style={({ pressed }) => [s.cta, pressed && { opacity: 0.85 }]}
+          onPress={() => onNew("Finds List")}
+        >
+          <Text style={s.ctaText}>＋ Import recording</Text>
         </Pressable>
-      ))}
-    </ScrollView>
+        <Pressable
+          style={({ pressed }) => [s.ctaAlt, pressed && { opacity: 0.85 }]}
+          onPress={() => onSample("Finds List")}
+        >
+          <Text style={s.ctaAltText}>✨ Try a sample recording</Text>
+        </Pressable>
+
+        <Text style={s.section}>Templates</Text>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={{ marginHorizontal: -20 }}
+        >
+          <View
+            style={{ flexDirection: "row", gap: 12, paddingHorizontal: 20 }}
+          >
+            {templates.map((t) => (
+              <Pressable
+                key={t.name}
+                onPress={() => setPicked(t)}
+                style={[s.tpl, { backgroundColor: t.a }]}
+              >
+                <Text style={s.tplTag}>{t.tag}</Text>
+                <View style={s.tplPhone}>
+                  <MiniScreen name={t.name} />
+                </View>
+                <Text style={s.tplName}>{t.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </ScrollView>
+
+        <Text style={s.section}>Recent projects</Text>
+        {projects.length === 0 && (
+          <Text style={s.sheetHint}>
+            No projects yet. Import a recording to start.
+          </Text>
+        )}
+        {projects.map((p) => (
+          <Pressable key={p.id} style={s.draft} onPress={() => onOpen(p)}>
+            <View style={s.draftThumb} />
+            <View style={{ flex: 1 }}>
+              <Text style={s.draftName} numberOfLines={1}>
+                {p.name}
+              </Text>
+              <Text style={s.draftMeta}>
+                {p.template} · {fmt(p.trim[1] - p.trim[0])}
+              </Text>
+            </View>
+            <Text style={[s.badge, !p.exported && s.badgeDraft]}>
+              {p.exported ? "Exported" : "Draft"}
+            </Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+      {picked && (
+        <View style={s.tplOverlay}>
+          <Pressable style={{ flex: 1 }} onPress={() => setPicked(null)} />
+          <View style={s.tplSheet}>
+            <View style={{ flexDirection: "row", gap: 16 }}>
+              <View
+                style={[
+                  s.tplPhone,
+                  { marginVertical: 0, width: 96, height: 170 },
+                ]}
+              >
+                <MiniScreen name={picked.name} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tplSheetTitle}>{picked.name}</Text>
+                <Text style={s.tplSheetBlurb}>{picked.blurb}</Text>
+              </View>
+            </View>
+            <Pressable
+              style={s.cta}
+              onPress={() => {
+                const t = picked.name;
+                setPicked(null);
+                onSample(t);
+              }}
+            >
+              <Text style={s.ctaText}>✨ Try with sample recording</Text>
+            </Pressable>
+            <Pressable
+              style={s.ctaAlt}
+              onPress={() => {
+                const t = picked.name;
+                setPicked(null);
+                onNew(t);
+              }}
+            >
+              <Text style={s.ctaAltText}>＋ Import my recording</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setPicked(null)}
+              style={{ alignItems: "center", padding: 12 }}
+            >
+              <Text style={{ color: "rgba(255,255,255,0.5)" }}>Cancel</Text>
+            </Pressable>
+          </View>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -333,7 +403,10 @@ function Editor({
     p.loop = false;
   });
 
-  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
+  const recorder = useAudioRecorder({
+    ...RecordingPresets.HIGH_QUALITY,
+    isMeteringEnabled: true,
+  });
   const recState = useAudioRecorderState(recorder, 100);
   const voicePlayer = useAudioPlayer(project.voiceUri ?? null);
   const [voiceRec, setVoiceRec] = useState(false);
@@ -392,10 +465,15 @@ function Editor({
     try {
       const perm = await AudioModule.requestRecordingPermissionsAsync();
       if (!perm.granted) {
-        setVoiceMsg("Microphone permission denied. Enable it for Expo Go in Settings.");
+        setVoiceMsg(
+          "Microphone permission denied. Enable it for Expo Go in Settings.",
+        );
         return;
       }
-      await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: true });
+      await setAudioModeAsync({
+        playsInSilentMode: true,
+        allowsRecording: true,
+      });
       voicePlayer.pause();
       await recorder.prepareToRecordAsync();
       player.currentTime = trim[0];
@@ -403,7 +481,9 @@ function Editor({
       player.play();
       setVoiceRec(true);
     } catch (e) {
-      setVoiceMsg(`Could not start recording: ${e instanceof Error ? e.message : String(e)}`);
+      setVoiceMsg(
+        `Could not start recording: ${e instanceof Error ? e.message : String(e)}`,
+      );
     }
   };
   const stopVoice = async () => {
@@ -416,7 +496,10 @@ function Editor({
     } catch {
       setVoiceMsg("Recording was interrupted.");
     }
-    await setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch(() => {});
+    await setAudioModeAsync({
+      playsInSilentMode: true,
+      allowsRecording: false,
+    }).catch(() => {});
   };
   // stop automatically when the trimmed range ends
   useEffect(() => {
@@ -524,7 +607,7 @@ function Editor({
 
   const camNode = camOn ? (
     <CameraView
-      key={micOk ? 'mic' : 'nomic'}
+      key={micOk ? "mic" : "nomic"}
       ref={camRef}
       style={s.fill}
       facing="front"
@@ -790,12 +873,19 @@ function Editor({
             <Pressable
               style={[
                 s.stepBtn,
-                { alignItems: "center", backgroundColor: voiceRec ? "#ef4444" : "#dc2626" },
+                {
+                  alignItems: "center",
+                  backgroundColor: voiceRec ? "#ef4444" : "#dc2626",
+                },
               ]}
               onPress={voiceRec ? stopVoice : startVoice}
             >
               <Text style={{ color: "#fff", fontWeight: "700" }}>
-                {voiceRec ? "■ Stop recording" : project.voiceUri ? "● Re-record voiceover" : "● Record voiceover"}
+                {voiceRec
+                  ? "■ Stop recording"
+                  : project.voiceUri
+                    ? "● Re-record voiceover"
+                    : "● Record voiceover"}
               </Text>
             </Pressable>
             {voiceRec && (
@@ -803,7 +893,9 @@ function Editor({
                 <View
                   style={[
                     s.meterFill,
-                    { width: `${Math.max(4, Math.min(100, ((recState.metering ?? -60) + 60) * (100 / 60)))}%` },
+                    {
+                      width: `${Math.max(4, Math.min(100, ((recState.metering ?? -60) + 60) * (100 / 60)))}%`,
+                    },
                   ]}
                 />
               </View>
@@ -816,7 +908,10 @@ function Editor({
                   : "Works in any layout, including Screen only. The video plays while you talk."}
             </Text>
             {project.voiceUri && !voiceRec && (
-              <Pressable style={[s.stepBtn, { alignItems: "center" }]} onPress={() => patch({ voiceUri: undefined })}>
+              <Pressable
+                style={[s.stepBtn, { alignItems: "center" }]}
+                onPress={() => patch({ voiceUri: undefined })}
+              >
                 <Text style={s.layoutText}>Remove voiceover</Text>
               </Pressable>
             )}
@@ -971,6 +1066,33 @@ const s = StyleSheet.create({
     alignItems: "center",
     marginTop: 28,
   },
+  tplOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(10,8,18,0.6)",
+  },
+  tplSheet: {
+    backgroundColor: c.plum2,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    padding: 20,
+    paddingBottom: 8,
+  },
+  tplSheetTitle: {
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    letterSpacing: -0.5,
+  },
+  tplSheetBlurb: {
+    color: "rgba(255,255,255,0.65)",
+    fontSize: 14,
+    marginTop: 8,
+    lineHeight: 20,
+  },
   ctaAlt: {
     borderRadius: 999,
     paddingVertical: 16,
@@ -1043,7 +1165,12 @@ const s = StyleSheet.create({
   },
   badgeDraft: { backgroundColor: "rgba(255,255,255,0.12)", color: "#fff" },
 
-  meterTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+  meterTrack: {
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "rgba(255,255,255,0.12)",
+    overflow: "hidden",
+  },
   meterFill: { height: 8, borderRadius: 4, backgroundColor: c.hot },
   camText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 8 },
