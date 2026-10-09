@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { TemplateScreen } from "../TemplateScreens";
+import { clamp, ZOOM_SCALES, zoomAt, type Zoom } from "./zoom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 type Layout = "screen" | "pip" | "split";
@@ -15,6 +16,11 @@ const TEMPLATES: Record<Template, { name: string; bg: string; prefix: (n: number
 };
 
 const SAMPLE_URL = "/sample/screen-recording.mp4";
+const SAMPLE_ZOOMS: Zoom[] = [
+  { id: "z1", at: 0.4, dur: 2.2, scale: 2, x: 0.4, y: 0.3 },
+  { id: "z2", at: 6.4, dur: 2.2, scale: 1.8, x: 0.3, y: 0.45 },
+  { id: "z3", at: 12.4, dur: 2.2, scale: 2.4, x: 0.5, y: 0.25 },
+];
 const SAMPLE_LABELS = ["Noted", "Fernwood", "Pennywise", "Brunchbook", "Loomly"];
 
 const STORE = "reelvii.project.v1";
@@ -45,6 +51,10 @@ export default function Studio() {
   const [camTake, setCamTake] = useState(false); // cameraUrl is a recorded take (has audio)
   const [takeRec, setTakeRec] = useState(false);
   const takeRecorder = useRef<MediaRecorder | null>(null);
+  const [zooms, setZooms] = useState<Zoom[]>([]);
+  const [selId, setSelId] = useState<string | null>(null);
+  const [zoomMsg, setZoomMsg] = useState<string | null>(null);
+  const zoomEl = useRef<HTMLDivElement>(null);
 
   const screenRef = useRef<HTMLVideoElement>(null);
   const cameraRef = useRef<HTMLVideoElement>(null);
@@ -177,6 +187,8 @@ export default function Studio() {
   const loadSample = () => {
     if (screenUrl) URL.revokeObjectURL(screenUrl);
     setScreenUrl(SAMPLE_URL);
+    setZooms(SAMPLE_ZOOMS);
+    setSelId(null);
     setLabels(SAMPLE_LABELS.map((text, i) => ({ id: `s${i}`, text, at: i * 3 })));
   };
 
@@ -278,6 +290,7 @@ export default function Studio() {
       split,
       trim_ms: trim.map((t) => Math.round(t * 1000)),
       labels: labels.map((l) => ({ text: l.text, at_ms: Math.round(l.at * 1000) })),
+      zooms: zooms.map((z) => ({ at_ms: Math.round(z.at * 1000), duration_ms: Math.round(z.dur * 1000), scale: z.scale, x: z.x, y: z.y })),
     };
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob([JSON.stringify(project, null, 2)], { type: "application/json" }));
@@ -312,6 +325,70 @@ export default function Studio() {
       Camera
     </div>
   );
+  const sel = zooms.find((z) => z.id === selId) ?? null;
+  const editingFrame = !!sel && !playing;
+
+  // drive the zoom transform every frame so it glides instead of stepping
+  useEffect(() => {
+    let raf = 0;
+    const tick = () => {
+      const el = zoomEl.current;
+      const v = screenRef.current;
+      const box = el?.parentElement;
+      if (el && v && box) {
+        const z = editingFrame
+          ? { k: 1, tx: 0, ty: 0 }
+          : zoomAt(zooms, v.currentTime, box.clientWidth, box.clientHeight);
+        el.style.transition = v.paused ? "transform 260ms ease-out" : "none";
+        el.style.transform = `translate(${z.tx}px, ${z.ty}px) scale(${z.k})`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    tick();
+    return () => cancelAnimationFrame(raf);
+  }, [zooms, editingFrame]);
+
+  const setZoom = (id: string, p: Partial<Zoom>) =>
+    setZooms((zs) => zs.map((z) => (z.id === id ? { ...z, ...p } : z)));
+  const addZoom = () => {
+    setZoomMsg(null);
+    const at = Math.round(clamp(time, trim[0], trim[1] - 0.5) * 10) / 10;
+    const dur = Math.min(2.5, trim[1] - at);
+    if (!screenUrl || dur < 0.5) return setZoomMsg("Load a recording and leave at least 0.5s after the playhead.");
+    if (zooms.some((z) => at < z.at + z.dur && at + dur > z.at))
+      return setZoomMsg("Zooms can't overlap — move the playhead to a free spot.");
+    const z: Zoom = { id: crypto.randomUUID(), at, dur, scale: 2, x: 0.5, y: 0.5 };
+    setZooms((zs) => [...zs, z].sort((a, b) => a.at - b.at));
+    setSelId(z.id);
+  };
+  const aim = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!sel || !editingFrame) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    setZoom(sel.id, { x: clamp((e.clientX - r.left) / r.width, 0, 1), y: clamp((e.clientY - r.top) / r.height, 0, 1) });
+  };
+  const screenLayer = (
+    <div className={`relative h-full w-full overflow-hidden ${editingFrame ? "cursor-crosshair" : ""}`} onClick={aim}>
+      <div ref={zoomEl} className="h-full w-full will-change-transform">{screenVideo}</div>
+      {editingFrame && sel && (
+        <div className="pointer-events-none absolute inset-0">
+          <div
+            className="absolute rounded-md border-2 border-violet-hot bg-violet-hot/10"
+            style={{
+              width: `${100 / sel.scale}%`,
+              height: `${100 / sel.scale}%`,
+              left: `${clamp(sel.x * 100 - 50 / sel.scale, 0, 100 - 100 / sel.scale)}%`,
+              top: `${clamp(sel.y * 100 - 50 / sel.scale, 0, 100 - 100 / sel.scale)}%`,
+            }}
+          />
+          <div
+            className="absolute h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-violet-hot"
+            style={{ left: `${sel.x * 100}%`, top: `${sel.y * 100}%` }}
+          />
+        </div>
+      )}
+    </div>
+  );
+
   const emptyScreen = (
     <div className="relative h-full w-full">
       <TemplateScreen kind={T.kind} />
@@ -411,12 +488,12 @@ export default function Studio() {
               <div className="flex h-full flex-col">
                 <div style={{ height: `${split}%` }}>{cameraVideo}</div>
                 <div className="h-0.5 bg-white" />
-                <div className="flex-1 overflow-hidden">{screenUrl ? screenVideo : emptyScreen}</div>
+                <div className="flex-1 overflow-hidden">{screenUrl ? screenLayer : emptyScreen}</div>
               </div>
             ) : (
               <div className={layout === "screen" && template === "showcase" ? "h-full p-6 pt-12" : "h-full"}>
                 <div className={`h-full overflow-hidden ${template === "showcase" && layout === "screen" ? "rounded-2xl" : ""}`}>
-                  {screenUrl ? screenVideo : emptyScreen}
+                  {screenUrl ? screenLayer : emptyScreen}
                 </div>
               </div>
             )}
@@ -496,6 +573,54 @@ export default function Studio() {
                 className="w-full accent-violet-hot" />
             </label>
             <p className="text-xs text-white/40">Output length {fmt(Math.max(0, trim[1] - trim[0]))}</p>
+          </div>
+
+          <div>
+            <h2 className="mb-2 text-xs font-bold uppercase tracking-widest text-lilac">Zoom</h2>
+            <button onClick={addZoom} className="w-full rounded-xl bg-violet py-2.5 text-sm font-semibold hover:bg-violet-hot">
+              ＋ Add zoom at {fmt(time)}
+            </button>
+            {zoomMsg && <p className="mt-2 text-xs text-red-300">{zoomMsg}</p>}
+            {sel ? (
+              <div className="mt-3 space-y-2">
+                <div className="grid grid-cols-3 gap-2">
+                  {ZOOM_SCALES.map((sc) => (
+                    <button key={sc} onClick={() => setZoom(sel.id, { scale: sc })}
+                      className={`rounded-lg py-2 text-sm font-semibold ${sel.scale === sc ? "bg-violet" : "bg-white/10 hover:bg-white/15"}`}>
+                      {sc}×
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 text-xs text-white/60">
+                  <span className="flex-1">Length {sel.dur.toFixed(1)}s</span>
+                  <button className="rounded-lg bg-white/10 px-3 py-1.5" onClick={() => setZoom(sel.id, { dur: Math.max(1, sel.dur - 0.5) })}>−</button>
+                  <button className="rounded-lg bg-white/10 px-3 py-1.5" onClick={() => setZoom(sel.id, { dur: Math.min(6, trim[1] - sel.at, sel.dur + 0.5) })}>+</button>
+                </div>
+                <div className="flex items-center gap-2 text-xs text-white/60">
+                  <span className="flex-1">Aim</span>
+                  {([["◀", -0.1, 0], ["▲", 0, -0.1], ["▼", 0, 0.1], ["▶", 0.1, 0]] as const).map(([g, dx, dy]) => (
+                    <button key={g} className="rounded-lg bg-white/10 px-3 py-1.5"
+                      onClick={() => setZoom(sel.id, { x: clamp(sel.x + dx, 0, 1), y: clamp(sel.y + dy, 0, 1) })}>{g}</button>
+                  ))}
+                </div>
+                <p className="text-xs text-white/40">Click the preview to aim (while paused). Press play to watch it glide.</p>
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-white/40">
+                {zooms.length ? "Select a zoom below to edit it." : "Add a zoom, then click the preview to choose where it focuses."}
+              </p>
+            )}
+            <ul className="mt-3 space-y-1.5">
+              {zooms.map((z, i) => (
+                <li key={z.id} className="flex items-center justify-between rounded-xl bg-white/5 px-3 py-2 text-sm">
+                  <button onClick={() => { setSelId(z.id); seek(z.at); }} className={`truncate text-left ${z.id === selId ? "text-violet-hot" : ""}`}>
+                    {i + 1}. {fmt(z.at)} · {z.scale}× · {z.dur.toFixed(1)}s
+                  </button>
+                  <button onClick={() => { setZooms((zs) => zs.filter((q) => q.id !== z.id)); if (selId === z.id) setSelId(null); }}
+                    className="ml-2 text-white/40 hover:text-white" aria-label="Delete zoom">✕</button>
+                </li>
+              ))}
+            </ul>
           </div>
 
           <div>

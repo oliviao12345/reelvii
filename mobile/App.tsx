@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { StatusBar } from "expo-status-bar";
 import {
+  Animated,
+  Easing,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -82,6 +84,42 @@ const drafts = [
 const tools = ["Trim", "Layout", "Voice", "Text", "Zoom", "Style"] as const;
 const layouts = ["Screen", "PiP", "Split"] as const;
 
+/** A Screen Studio-style zoom: ease in toward (x, y), hold, ease back out. x/y are 0..1 of the screen. */
+type Zoom = {
+  id: string;
+  at: number;
+  dur: number;
+  scale: number;
+  x: number;
+  y: number;
+};
+const ZOOM_SCALES = [1.5, 2, 3];
+const clamp = (v: number, lo: number, hi: number) =>
+  Math.max(lo, Math.min(hi, v));
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
+function zoomAt(zooms: Zoom[], t: number, w: number, h: number) {
+  const z = zooms.find((q) => t >= q.at && t <= q.at + q.dur);
+  if (!z) return { k: 1, tx: 0, ty: 0 };
+  const ramp = Math.min(0.7, z.dur / 2);
+  const e =
+    t < z.at + ramp
+      ? easeInOut((t - z.at) / ramp)
+      : t > z.at + z.dur - ramp
+        ? easeInOut((z.at + z.dur - t) / ramp)
+        : 1;
+  const k = 1 + (z.scale - 1) * e;
+  // keep the focus point centred, but never reveal empty edges
+  const mx = ((k - 1) * w) / 2;
+  const my = ((k - 1) * h) / 2;
+  return {
+    k,
+    tx: clamp((0.5 - z.x) * w * k, -mx, mx),
+    ty: clamp((0.5 - z.y) * h * k, -my, my),
+  };
+}
+
 type Project = {
   id: string;
   name: string;
@@ -93,6 +131,7 @@ type Project = {
   labels: { text: string; at: number }[];
   cameraUri?: string; // recorded talking-head take
   voiceUri?: string; // voiceover recording (audio only)
+  zooms?: Zoom[];
   exported?: boolean;
 };
 
@@ -580,6 +619,126 @@ function Editor({
     voiceSeek(t);
   };
   const [trackW, setTrackW] = useState(1);
+  // ---- zoom ----
+  const zooms = project.zooms ?? [];
+  const [selId, setSelId] = useState<string | null>(null);
+  const [zoomMsg, setZoomMsg] = useState<string | null>(null);
+  const [size, setSize] = useState({ w: 1, h: 1 });
+  const sel = zooms.find((z) => z.id === selId) ?? null;
+  const editingFrame = tool === "Zoom" && !isPlaying && !!sel;
+  const zk = useRef(new Animated.Value(1)).current;
+  const ztx = useRef(new Animated.Value(0)).current;
+  const zty = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const tgt = editingFrame
+      ? { k: 1, tx: 0, ty: 0 }
+      : zoomAt(zooms, currentTime, size.w, size.h);
+    const cfg = isPlaying
+      ? { duration: 110, easing: Easing.linear }
+      : { duration: 260, easing: Easing.out(Easing.cubic) };
+    Animated.parallel([
+      Animated.timing(zk, { toValue: tgt.k, useNativeDriver: true, ...cfg }),
+      Animated.timing(ztx, { toValue: tgt.tx, useNativeDriver: true, ...cfg }),
+      Animated.timing(zty, { toValue: tgt.ty, useNativeDriver: true, ...cfg }),
+    ]).start();
+  }, [currentTime, zooms, editingFrame, isPlaying, size]);
+
+  const setZoom = (id: string, p: Partial<Zoom>) =>
+    patch({ zooms: zooms.map((z) => (z.id === id ? { ...z, ...p } : z)) });
+  const addZoom = () => {
+    setZoomMsg(null);
+    const at = Math.round(clamp(currentTime, trim[0], trim[1] - 0.5) * 10) / 10;
+    const dur = Math.min(2.5, trim[1] - at);
+    if (dur < 0.5)
+      return setZoomMsg("Not enough room before the end of the clip.");
+    if (zooms.some((z) => at < z.at + z.dur && at + dur > z.at))
+      return setZoomMsg(
+        "Zooms can't overlap — move the playhead to a free spot.",
+      );
+    const z: Zoom = {
+      id: String(Date.now()),
+      at,
+      dur,
+      scale: 2,
+      x: 0.5,
+      y: 0.5,
+    };
+    patch({ zooms: [...zooms, z].sort((a, b) => a.at - b.at) });
+    setSelId(z.id);
+  };
+  const aim = (x: number, y: number) => {
+    if (sel) setZoom(sel.id, { x: clamp(x, 0, 1), y: clamp(y, 0, 1) });
+  };
+
+  const screenVideo = (
+    <Pressable
+      style={[s.fill, { overflow: "hidden" }]}
+      onLayout={(e) =>
+        setSize({
+          w: e.nativeEvent.layout.width,
+          h: e.nativeEvent.layout.height,
+        })
+      }
+      disabled={!editingFrame}
+      onPress={(e) =>
+        aim(e.nativeEvent.locationX / size.w, e.nativeEvent.locationY / size.h)
+      }
+    >
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          s.fill,
+          {
+            transform: [
+              { translateX: ztx },
+              { translateY: zty },
+              { scale: zk },
+            ],
+          },
+        ]}
+      >
+        <VideoView
+          player={player}
+          nativeControls={false}
+          contentFit="cover"
+          style={s.fill}
+        />
+      </Animated.View>
+      {editingFrame && sel && (
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+          <View
+            style={{
+              position: "absolute",
+              width: size.w / sel.scale,
+              height: size.h / sel.scale,
+              left: clamp(
+                sel.x * size.w - size.w / sel.scale / 2,
+                0,
+                size.w - size.w / sel.scale,
+              ),
+              top: clamp(
+                sel.y * size.h - size.h / sel.scale / 2,
+                0,
+                size.h - size.h / sel.scale,
+              ),
+              borderWidth: 2,
+              borderColor: c.hot,
+              borderRadius: 6,
+              backgroundColor: "rgba(155,123,255,0.12)",
+            }}
+          />
+          <View
+            style={[
+              s.aimDot,
+              { left: sel.x * size.w - 7, top: sel.y * size.h - 7 },
+            ]}
+          />
+        </View>
+      )}
+    </Pressable>
+  );
+
   const pct = (project.duration ? currentTime / project.duration : 0) * 100;
 
   const idx = labels.findLastIndex(
@@ -664,21 +823,11 @@ function Editor({
             <>
               <View style={[s.fill, { overflow: "hidden" }]}>{camNode}</View>
               <View style={[s.fill, { overflow: "hidden" }]}>
-                <VideoView
-                  player={player}
-                  nativeControls={false}
-                  contentFit="cover"
-                  style={s.fill}
-                />
+                {screenVideo}
               </View>
             </>
           ) : (
-            <VideoView
-              player={player}
-              nativeControls={false}
-              contentFit="cover"
-              style={s.fill}
-            />
+            screenVideo
           )}
           {layout === "PiP" && (
             <View style={[s.bubble, { overflow: "hidden" }]}>{camNode}</View>
@@ -715,6 +864,19 @@ function Editor({
                 backgroundColor: "rgba(155,123,255,0.35)",
               }}
             />
+            {zooms.map((z) => (
+              <View
+                key={z.id}
+                style={{
+                  position: "absolute",
+                  height: 6,
+                  left: `${(z.at / (project.duration || 1)) * 100}%`,
+                  width: `${(z.dur / (project.duration || 1)) * 100}%`,
+                  backgroundColor: "#ffb86b",
+                  opacity: z.id === selId ? 1 : 0.6,
+                }}
+              />
+            ))}
             <View style={[s.scrubFill, { width: `${pct}%` }]} />
             <View style={[s.scrubKnob, { left: `${pct}%` }]} />
           </View>
@@ -918,8 +1080,126 @@ function Editor({
             {voiceMsg && <Text style={s.sheetHint}>{voiceMsg}</Text>}
           </View>
         )}
-        {(tool === "Zoom" || tool === "Style") && (
-          <Text style={s.sheetHint}>{tool} tools coming soon</Text>
+        {tool === "Zoom" && (
+          <View style={{ marginBottom: 14, gap: 8 }}>
+            <Pressable
+              style={[
+                s.stepBtn,
+                { alignItems: "center", backgroundColor: c.violet },
+              ]}
+              onPress={addZoom}
+            >
+              <Text style={{ color: "#fff", fontWeight: "700" }}>
+                ＋ Add zoom at {fmt(currentTime)}
+              </Text>
+            </Pressable>
+            {zoomMsg && <Text style={s.sheetHint}>{zoomMsg}</Text>}
+            {sel ? (
+              <>
+                <View style={s.stepRow}>
+                  {ZOOM_SCALES.map((sc) => (
+                    <Pressable
+                      key={sc}
+                      onPress={() => setZoom(sel.id, { scale: sc })}
+                      style={[
+                        s.layoutChip,
+                        sel.scale === sc && s.layoutChipOn,
+                        { paddingVertical: 10 },
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.layoutText,
+                          sel.scale === sc && { color: "#fff" },
+                        ]}
+                      >
+                        {sc}×
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <View style={s.stepRow}>
+                  <Text style={s.stepLabel}>Length {sel.dur.toFixed(1)}s</Text>
+                  <Pressable
+                    style={s.stepBtn}
+                    onPress={() =>
+                      setZoom(sel.id, { dur: Math.max(1, sel.dur - 0.5) })
+                    }
+                  >
+                    <Text style={s.layoutText}>−</Text>
+                  </Pressable>
+                  <Pressable
+                    style={s.stepBtn}
+                    onPress={() =>
+                      setZoom(sel.id, {
+                        dur: Math.min(6, trim[1] - sel.at, sel.dur + 0.5),
+                      })
+                    }
+                  >
+                    <Text style={s.layoutText}>+</Text>
+                  </Pressable>
+                </View>
+                <View style={s.stepRow}>
+                  <Text style={s.stepLabel}>Aim</Text>
+                  {(
+                    [
+                      ["◀", -0.1, 0],
+                      ["▲", 0, -0.1],
+                      ["▼", 0, 0.1],
+                      ["▶", 0.1, 0],
+                    ] as const
+                  ).map(([g, dx, dy]) => (
+                    <Pressable
+                      key={g}
+                      style={s.stepBtn}
+                      onPress={() => aim(sel.x + dx, sel.y + dy)}
+                    >
+                      <Text style={s.layoutText}>{g}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={s.sheetHint}>
+                  Tap the preview to aim · press ▶ to see the zoom in motion
+                </Text>
+              </>
+            ) : (
+              <Text style={s.sheetHint}>
+                {zooms.length
+                  ? "Select a zoom below to edit it."
+                  : "Add a zoom, then tap the preview to choose where it focuses."}
+              </Text>
+            )}
+            {zooms.map((z, i) => (
+              <View key={z.id} style={s.stepRow}>
+                <Pressable
+                  style={{ flex: 1 }}
+                  onPress={() => {
+                    setSelId(z.id);
+                    player.currentTime = z.at;
+                  }}
+                >
+                  <Text
+                    style={{ color: z.id === selId ? c.hot : "#fff" }}
+                    numberOfLines={1}
+                  >
+                    {i + 1}. {fmt(z.at)} · {z.scale}× · {z.dur.toFixed(1)}s
+                  </Text>
+                </Pressable>
+                <Pressable
+                  hitSlop={10}
+                  onPress={() => {
+                    patch({ zooms: zooms.filter((q) => q.id !== z.id) });
+                    if (selId === z.id) setSelId(null);
+                  }}
+                >
+                  <Text style={{ color: "rgba(255,255,255,0.5)" }}>✕</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
+        {tool === "Style" && (
+          <Text style={s.sheetHint}>Style tools coming soon</Text>
         )}
         <View style={s.rail}>
           {tools.map((t) => (
@@ -999,6 +1279,11 @@ function Shell() {
         layout: "PiP",
         trim: [0, 15],
         labels: SAMPLE_LABELS.map((text, i) => ({ text, at: i * 3 })),
+        zooms: [
+          { id: "z1", at: 0.4, dur: 2.2, scale: 2, x: 0.4, y: 0.3 },
+          { id: "z2", at: 6.4, dur: 2.2, scale: 1.8, x: 0.3, y: 0.45 },
+          { id: "z3", at: 12.4, dur: 2.2, scale: 2.4, x: 0.5, y: 0.25 },
+        ],
       };
       save([p, ...projects]);
       setOpenId(p.id);
@@ -1172,6 +1457,15 @@ const s = StyleSheet.create({
     overflow: "hidden",
   },
   meterFill: { height: 8, borderRadius: 4, backgroundColor: c.hot },
+  aimDot: {
+    position: "absolute",
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: c.hot,
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
   camText: { color: "#fff", fontSize: 11, fontWeight: "700" },
   stepRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   stepLabel: { color: "#fff", flex: 1, fontVariant: ["tabular-nums"] },
