@@ -1,0 +1,8 @@
+node_modules
+.next
+.expo
+.env*
+.DS_Store
+brief-do-not-commit/
+*.pdf
+expo.log
