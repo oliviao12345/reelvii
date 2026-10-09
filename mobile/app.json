@@ -20,6 +20,24 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Reelvii uses the camera to record your talking-head overlay.",
+          "microphonePermission": "Reelvii uses the microphone to record your voiceover.",
+          "recordAudioAndroid": true
+        }
+      ],
+      "expo-asset",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Reelvii uses the microphone to record your voiceover."
+        }
+      ]
+    ]
   }
 }

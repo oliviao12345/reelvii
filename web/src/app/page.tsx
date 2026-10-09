@@ -1,3 +1,6 @@
+import Link from "next/link";
+import { LayoutScreen, TemplateScreen } from "./TemplateScreens";
+
 const templates = [
   {
     name: "Finds List",
@@ -99,12 +102,12 @@ export default function Home() {
           <a href="#layouts" className="hover:text-white">Layouts</a>
           <a href="#how" className="hover:text-white">How it works</a>
         </nav>
-        <a
-          href="#cta"
+        <Link
+          href="/studio"
           className="rounded-full bg-white px-4 py-2 text-sm font-semibold text-ink transition hover:bg-lilac"
         >
           Start creating ↗
-        </a>
+        </Link>
       </header>
 
       {/* HERO */}
@@ -125,13 +128,13 @@ export default function Home() {
               degree required.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <a
+              <Link
                 id="cta"
-                href="#"
+                href="/studio"
                 className="rounded-full bg-violet px-6 py-3.5 font-semibold text-white shadow-[0_8px_30px_-6px_rgba(124,92,220,0.8)] transition hover:bg-violet-hot"
               >
                 Start creating ↗
-              </a>
+              </Link>
               <a
                 href="#templates"
                 className="rounded-full border border-white/20 px-6 py-3.5 font-semibold text-white transition hover:bg-white/10"
@@ -181,8 +184,8 @@ export default function Home() {
               <span className="rounded-full bg-ink/70 px-2.5 py-1 text-[11px] font-medium">
                 {t.tag}
               </span>
-              <div className="mx-auto my-6 h-56 w-32 rounded-2xl border-4 border-ink bg-ink/80 p-2 shadow-2xl transition group-hover:rotate-2">
-                <div className="h-full rounded-lg bg-white/90" />
+              <div className="mx-auto my-6 h-64 w-36 rounded-2xl border-4 border-ink bg-ink/80 p-2 shadow-2xl transition group-hover:rotate-2">
+                <div className="h-full overflow-hidden rounded-lg bg-white"><TemplateScreen kind={t.name as "Finds List" | "Walkthrough" | "Showcase"} /></div>
               </div>
               <h3 className="display text-3xl font-bold">{t.name}</h3>
               <p className="mt-1 text-sm text-white/80">{t.blurb}</p>
@@ -200,20 +203,8 @@ export default function Home() {
           <div className="mt-12 grid gap-5 md:grid-cols-3">
             {layouts.map((l, i) => (
               <div key={l.name} className="rounded-3xl bg-lilac-soft p-6">
-                <div className="mx-auto h-48 w-28 overflow-hidden rounded-2xl border-4 border-ink bg-white">
-                  {i === 0 && <div className="m-2 h-[calc(100%-1rem)] rounded-lg bg-lilac" />}
-                  {i === 1 && (
-                    <div className="relative h-full bg-lilac">
-                      <div className="absolute bottom-2 right-2 h-9 w-9 rounded-full border-2 border-white bg-violet" />
-                    </div>
-                  )}
-                  {i === 2 && (
-                    <div className="flex h-full flex-col">
-                      <div className="flex-1 bg-lilac" />
-                      <div className="h-0.5 bg-white" />
-                      <div className="flex-1 bg-violet" />
-                    </div>
-                  )}
+                <div className="mx-auto h-60 w-36 overflow-hidden rounded-2xl border-4 border-ink bg-white">
+                  <LayoutScreen kind={i as 0 | 1 | 2} />
                 </div>
                 <h3 className="mt-5 text-lg font-bold">{l.name}</h3>
                 <p className="text-sm text-ink/60">{l.hint}</p>
@@ -241,12 +232,12 @@ export default function Home() {
         <h2 className="display mx-auto max-w-3xl text-5xl font-extrabold md:text-7xl">
           Your studio is already in your pocket.
         </h2>
-        <a
-          href="#"
+        <Link
+          href="/studio"
           className="mt-8 inline-block rounded-full bg-white px-7 py-4 font-semibold text-ink transition hover:bg-lilac"
         >
           Start creating ↗
-        </a>
+        </Link>
       </section>
 
       <footer className="mx-auto flex max-w-6xl items-center justify-between px-5 py-8 text-xs text-white/40">

@@ -6,3 +6,13 @@ node_modules
 brief-do-not-commit/
 *.pdf
 expo.log
+
+# --- never push: AI/agent files and local-only config ---
+# Only README.md is allowed as markdown (CLAUDE.md, AGENTS.md, notes, etc. are ignored)
+*.md
+!README.md
+.claude/
+.cursor/
+*.log
+*.tsbuildinfo
+.vercel
